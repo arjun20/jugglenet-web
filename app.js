@@ -69,48 +69,152 @@ async function initMediaPipePose() {
 }
 
 async function loadYOLOModel() {
-    // Skip model loading - we'll use alternative ball detection
-    console.log('Using alternative ball detection (no model conversion needed)');
-    ballDetectionModel = null;
-    return true;
+    try {
+        const modelPath = './models/finetuned_web/model.json';
+        
+        // Check if model exists
+        const response = await fetch(modelPath, { method: 'HEAD' });
+        if (!response.ok) {
+            console.warn('YOLO model not found. Using fallback detection.');
+            ballDetectionModel = null;
+            return false;
+        }
+        
+        console.log('Loading YOLO model from', modelPath);
+        ballDetectionModel = await tf.loadLayersModel(modelPath);
+        console.log('✅ YOLO model loaded successfully');
+        return true;
+    } catch (error) {
+        console.warn('Failed to load YOLO model:', error);
+        console.warn('Using fallback ball detection');
+        ballDetectionModel = null;
+        return false;
+    }
 }
 
 async function detectBall(imageElement) {
-    // Alternative ball detection using color-based blob detection
-    // This works without needing model conversion
+    // If YOLO model is available, use it (matches Python version)
+    if (ballDetectionModel) {
+        try {
+            return await detectBallYOLO(imageElement);
+        } catch (error) {
+            console.error('YOLO detection error:', error);
+            // Fall back to pose-based estimation
+            return null;
+        }
+    }
+    
+    // Fallback: pose-based estimation (less accurate)
+    return null;
+}
+
+async function detectBallYOLO(imageElement) {
+    if (!ballDetectionModel || typeof tf === 'undefined') {
+        return null;
+    }
+    
     try {
-        // Create a temporary canvas to process the image
-        const tempCanvas = document.createElement('canvas');
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCanvas.width = imageElement.videoWidth || imageElement.width;
-        tempCanvas.height = imageElement.videoHeight || imageElement.height;
+        // Get image dimensions
+        const imgWidth = imageElement.videoWidth || imageElement.width;
+        const imgHeight = imageElement.videoHeight || imageElement.height;
         
-        // Draw video frame to canvas
-        tempCtx.drawImage(imageElement, 0, 0, tempCanvas.width, tempCanvas.height);
+        // Create canvas for preprocessing
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 640;  // YOLO input size
+        canvas.height = 640;
         
-        // Get image data
-        const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-        const data = imageData.data;
+        // Draw and resize image (maintain aspect ratio, pad if needed)
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, 640, 640);
         
-        // Simple ball detection: look for circular/oval shapes
-        // Focus on the lower portion of the frame (where ball is likely to be)
-        const roiY = Math.floor(tempCanvas.height * 0.4); // Start from 40% down
-        const roiHeight = Math.floor(tempCanvas.height * 0.6); // Use lower 60%
+        const scale = Math.min(640 / imgWidth, 640 / imgHeight);
+        const scaledWidth = imgWidth * scale;
+        const scaledHeight = imgHeight * scale;
+        const xOffset = (640 - scaledWidth) / 2;
+        const yOffset = (640 - scaledHeight) / 2;
         
-        // Detect circular objects using edge detection approximation
-        // This is a simplified version - for better results, you'd use HoughCircles
-        // For now, we'll use a simple blob detector based on color and shape
+        ctx.drawImage(imageElement, xOffset, yOffset, scaledWidth, scaledHeight);
         
-        // Look for objects that are roughly circular (simplified approach)
-        // You can enhance this with more sophisticated CV techniques
+        // Get image data and preprocess for YOLO
+        const imageData = ctx.getImageData(0, 0, 640, 640);
+        const pixels = imageData.data;
         
-        // For MVP: Return null and let the pose detection handle juggling
-        // The juggle counter can work with just pose detection
+        // Convert to tensor and normalize (0-255 to 0-1)
+        const input = tf.browser.fromPixels(imageData).div(255.0);
+        const batched = input.expandDims(0);  // Add batch dimension
         
-        return null; // Simplified - will enhance pose-based detection instead
+        // Run inference
+        const predictions = await ballDetectionModel.predict(batched);
+        
+        // Post-process predictions (YOLO format: [batch, boxes, 5+classes])
+        // Format: [x, y, w, h, conf, class0, class1, ...]
+        const predArray = await predictions.data();
+        const predShape = predictions.shape;
+        
+        // Clean up tensors
+        input.dispose();
+        batched.dispose();
+        predictions.dispose();
+        
+        // Parse detections (confidence threshold: 0.3, matching Python version)
+        const confThreshold = 0.3;
+        let bestDetection = null;
+        let bestConf = 0;
+        
+        // YOLO output format varies, try common formats
+        // Format 1: [batch, num_boxes, 5+num_classes] where 5 = [x, y, w, h, obj_conf]
+        const numBoxes = predShape[1] || predShape[0];
+        const boxSize = predShape[2] || predShape[1];
+        
+        for (let i = 0; i < numBoxes; i++) {
+            const baseIdx = i * boxSize;
+            
+            // Try different output formats
+            let x, y, w, h, conf, clsConf;
+            
+            if (boxSize >= 6) {
+                // Format: [x, y, w, h, obj_conf, class_conf]
+                x = predArray[baseIdx];
+                y = predArray[baseIdx + 1];
+                w = predArray[baseIdx + 2];
+                h = predArray[baseIdx + 3];
+                const objConf = predArray[baseIdx + 4];
+                clsConf = predArray[baseIdx + 5]; // Class 0 (football)
+                conf = objConf * clsConf;
+            } else if (boxSize >= 5) {
+                // Format: [x, y, w, h, conf]
+                x = predArray[baseIdx];
+                y = predArray[baseIdx + 1];
+                w = predArray[baseIdx + 2];
+                h = predArray[baseIdx + 3];
+                conf = predArray[baseIdx + 4];
+            } else {
+                continue;
+            }
+            
+            // Check confidence threshold and class (class 0 = football)
+            if (conf >= confThreshold && conf > bestConf) {
+                // Convert from model coordinates (0-1, center) to normalized image coordinates
+                // Account for padding
+                const cx = (x - xOffset / 640) / (scaledWidth / 640);
+                const cy = (y - yOffset / 640) / (scaledHeight / 640);
+                const nw = w / (scaledWidth / 640);
+                const nh = h / (scaledHeight / 640);
+                
+                // Clamp to valid range
+                const finalCx = Math.max(0, Math.min(1, cx));
+                const finalCy = Math.max(0, Math.min(1, cy));
+                
+                bestDetection = [finalCx, finalCy, nw, nh];
+                bestConf = conf;
+            }
+        }
+        
+        return bestDetection;
         
     } catch (error) {
-        console.error('Error in ball detection:', error);
+        console.error('Error in YOLO ball detection:', error);
         return null;
     }
 }
@@ -160,11 +264,11 @@ async function onPoseResults(results) {
         // Extract POIs
         const POIs = extractPOIs(results.poseLandmarks);
         
-        // Try to detect ball (alternative methods)
+        // Try to detect ball using YOLO (matches Python version)
         let ball = await detectBall(video);
         
-        // If ball detection fails, use pose-based estimation
-        if (!ball) {
+        // If YOLO detection fails and model is not available, use pose-based estimation
+        if (!ball && !ballDetectionModel) {
             ball = detectBallFromPose(results.poseLandmarks, predictions);
         }
         
@@ -276,28 +380,30 @@ function predictKF() {
 }
 
 function updateJuggleCount() {
+    // Match Python version: requires at least 10 predictions
     if (!predictions['Ball'] || predictions['Ball'].length < 10) return;
     
-    // Get ball Y positions
+    // Get ball Y positions (matching Python: predictions['Ball'][:,1])
     const ballY = predictions['Ball'].map(p => p[1]).filter(y => !isNaN(y));
     
     if (ballY.length < 10) return;
     
-    // Find peaks (minimum points in Y = maximum peaks in inverted Y)
+    // Find minimum points (peaks in inverted Y) - matching Python find_peaks with prominence=0.02
     const invertedY = ballY.map(y => 1 - y); // Invert for peak detection
     const peaks = findPeaks(invertedY, { prominence: 0.02 });
     
     if (peaks.length > 0) {
-        const minIndex = peaks[0];
+        const minIndex = peaks[0]; // First minimum point (matching Python: min_peak[0])
         const ballPos = [predictions['Ball'][minIndex][0], predictions['Ball'][minIndex][1]];
         
-        // Find closest body part
+        // Find closest body part (matching Python logic)
         let minDist = Infinity;
         let closestPart = null;
         
         Object.keys(POI_INDICES).forEach(part => {
             if (predictions[part] && predictions[part][minIndex]) {
                 const partPos = [predictions[part][minIndex][0], predictions[part][minIndex][1]];
+                // Euclidean distance (matching Python: np.linalg.norm(ball_pos-pos))
                 const dist = Math.sqrt(
                     Math.pow(ballPos[0] - partPos[0], 2) + 
                     Math.pow(ballPos[1] - partPos[1], 2)
@@ -313,7 +419,7 @@ function updateJuggleCount() {
         if (closestPart) {
             counts[closestPart]++;
             
-            // Reset history to avoid double counting
+            // Reset history to avoid double counting (matching Python: predictions[key] = np.empty(shape=(0,4)))
             POI_NAMES.forEach(poi => {
                 predictions[poi] = [];
                 measurements[poi] = [];
@@ -411,7 +517,7 @@ async function startCamera() {
         // Initialize MediaPipe
         await initMediaPipePose();
         
-        // Skip YOLO model loading - use alternative detection
+        // Load YOLO model for accurate ball detection (if available)
         await loadYOLOModel();
         
         // Setup canvas
