@@ -1,0 +1,26 @@
+{
+  "name": "jugglenet-web",
+  "version": "1.0.0",
+  "description": "JuggleNet Web App - AI-powered football juggling detector",
+  "main": "index.html",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "serve": "npx serve -s . -l 3000",
+    "deploy:vercel": "vercel",
+    "deploy:netlify": "netlify deploy"
+  },
+  "keywords": [
+    "juggling",
+    "football",
+    "soccer",
+    "computer-vision",
+    "mediapipe",
+    "tensorflow"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "serve": "^14.2.0"
+  }
+}
+

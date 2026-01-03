@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
+    <title>JuggleNet - Football Juggling Counter</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #videoCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror for selfie view */
+        }
+        
+        #overlayCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            transform: scaleX(-1);
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 10;
+        }
+        
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #000;
+            cursor: pointer;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            background: #fff;
+            transform: scale(1.05);
+        }
+        
+        button:active {
+            transform: scale(0.95);
+        }
+        
+        #startBtn {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        #stopBtn {
+            background: #f44336;
+            color: white;
+        }
+        
+        #stats {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            z-index: 10;
+            min-width: 200px;
+        }
+        
+        #stats h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #4CAF50;
+        }
+        
+        #stats div {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 20;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 30px;
+            border-radius: 15px;
+        }
+        
+        #error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 20;
+            background: rgba(244, 67, 54, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        @media (max-width: 768px) {
+            #stats {
+                top: 10px;
+                left: 10px;
+                padding: 10px 15px;
+                font-size: 12px;
+            }
+            
+            #stats h3 {
+                font-size: 16px;
+            }
+            
+            button {
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <video id="videoCanvas" autoplay playsinline></video>
+        <canvas id="overlayCanvas"></canvas>
+        
+        <div id="stats">
+            <h3>Juggle Counter</h3>
+            <div>Head: <span id="headCount">0</span></div>
+            <div>Left Knee: <span id="leftKneeCount">0</span></div>
+            <div>Right Knee: <span id="rightKneeCount">0</span></div>
+            <div>Left Foot: <span id="leftFootCount">0</span></div>
+            <div>Right Foot: <span id="rightFootCount">0</span></div>
+        </div>
+        
+        <div id="loading">
+            <h2>Loading JuggleNet...</h2>
+            <p>Initializing pose detection...</p>
+        </div>
+        
+        <div id="error">
+            <h3>Error</h3>
+            <p id="errorMsg"></p>
+        </div>
+        
+        <div id="controls">
+            <button id="startBtn">Start Camera</button>
+            <button id="stopBtn" style="display: none;">Stop</button>
+        </div>
+    </div>
+    
+    <!-- MediaPipe Pose -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/pose.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js" crossorigin="anonymous"></script>
+    
+    <!-- TensorFlow.js for YOLO -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    
+    <!-- Main application -->
+    <script src="kalman.js"></script>
+    <script src="juggle-counter.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
+
