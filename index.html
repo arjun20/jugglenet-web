@@ -204,28 +204,22 @@
     
     <!-- Load MediaPipe scripts dynamically with fallback -->
     <script>
-        // Try different possible file paths for MediaPipe
-        // MediaPipe files are typically in the root or solution_pose directory
+        // Try local files first (if downloaded), then fall back to CDN
+        // MediaPipe files are in the root of the npm package
         const MEDIAPIPE_CDNS = [
-            'https://unpkg.com/@mediapipe/pose@0.5.1635989137/solution_pose/pose.js',
-            'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/solution_pose/pose.js',
-            'https://unpkg.com/@mediapipe/pose@0.5.1635989137/pose.js',
-            'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/pose.js',
-            'https://unpkg.com/@mediapipe/pose@0.5.1635989137/dist/pose.js',
-            'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/dist/pose.js'
+            './mediapipe/pose/pose.js',  // Local file (if downloaded)
+            'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js'
         ];
         
         const CAMERA_CDNS = [
-            'https://unpkg.com/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js',
+            './mediapipe/camera_utils/camera_utils.js',  // Local file (if downloaded)
             'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js',
-            'https://unpkg.com/@mediapipe/camera_utils@0.3.1640029074/dist/camera_utils.js',
             'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/dist/camera_utils.js'
         ];
         
         const DRAWING_CDNS = [
-            'https://unpkg.com/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js',
+            './mediapipe/drawing_utils/drawing_utils.js',  // Local file (if downloaded)
             'https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js',
-            'https://unpkg.com/@mediapipe/drawing_utils@0.3.1620248257/dist/drawing_utils.js',
             'https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/dist/drawing_utils.js'
         ];
         
@@ -328,13 +322,15 @@
                     const errorMsg = document.getElementById('errorMsg');
                     if (errorMsg) {
                         errorMsg.innerHTML = error.message + 
-                            '<br><br><strong>Troubleshooting Steps:</strong><br>' +
-                            '1. Open Browser Console (F12) and check for detailed errors<br>' +
-                            '2. Check your internet connection<br>' +
-                            '3. Try refreshing the page<br>' +
-                            '4. Check if CDN is blocked by firewall/proxy<br>' +
-                            '5. If CDN is blocked, see README.md for local hosting instructions<br><br>' +
-                            '<strong>Console Errors:</strong> Check the browser console (F12 → Console tab) for specific error messages.';
+                            '<br><br><strong>Solution: Host MediaPipe Files Locally</strong><br>' +
+                            'CDN access is blocked. You need to download MediaPipe files locally:<br><br>' +
+                            '<strong>Option 1: Using the download script (requires Node.js):</strong><br>' +
+                            '<code>cd web-app && ./download-mediapipe.sh</code><br><br>' +
+                            '<strong>Option 2: Manual download:</strong><br>' +
+                            '1. Install Node.js and npm<br>' +
+                            '2. Run: <code>npm install @mediapipe/pose@0.5.1635989137 @mediapipe/camera_utils@0.3.1640029074 @mediapipe/drawing_utils@0.3.1620248257</code><br>' +
+                            '3. Copy files from node_modules to web-app/mediapipe/<br><br>' +
+                            'See README.md for detailed instructions.';
                     }
                 }
             }

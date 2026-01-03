@@ -43,14 +43,13 @@ async function initMediaPipePose() {
     
     pose = new Pose({
         locateFile: (file) => {
-            // Try multiple CDN sources for MediaPipe files
+            // Try local files first, then CDN
+            // Files are in the root of the npm package
             const cdns = [
-                `https://unpkg.com/@mediapipe/pose@0.5.1635989137/${file}`,
-                `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/${file}`,
-                `https://unpkg.com/@mediapipe/pose@0.5.1635989137/solution_pose/${file}`,
-                `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/solution_pose/${file}`
+                `./mediapipe/pose/${file}`,  // Local file (if downloaded)
+                `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`
             ];
-            // Return first CDN (will try others if this fails)
+            // Return first option (will try others if this fails)
             return cdns[0];
         }
     });

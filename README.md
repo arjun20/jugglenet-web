@@ -94,26 +94,53 @@ If you see "MediaPipe Pose library failed to load" errors:
 
 **Solution: Host MediaPipe Locally**
 
-If CDNs are blocked, download and host MediaPipe files locally:
+CDN access is blocked by CORS. You need to download MediaPipe files locally:
+
+### Quick Setup (Using the Script)
 
 ```bash
-# Create a mediapipe directory in web-app
-mkdir -p web-app/mediapipe
-
-# Download MediaPipe files (you'll need to get these from npm or GitHub)
-# Option 1: Using npm (if you have Node.js)
 cd web-app
-npm install @mediapipe/pose@0.5.1635989137
-npm install @mediapipe/camera_utils@0.3.1640029074
-npm install @mediapipe/drawing_utils@0.3.1620248257
-
-# Copy the files to a mediapipe folder
-cp -r node_modules/@mediapipe/pose/dist/* mediapipe/pose/
-cp -r node_modules/@mediapipe/camera_utils/dist/* mediapipe/camera_utils/
-cp -r node_modules/@mediapipe/drawing_utils/dist/* mediapipe/drawing_utils/
+./download-mediapipe.sh
 ```
 
-Then update `index.html` to use local files instead of CDN URLs.
+### Manual Setup
+
+1. **Install Node.js** (if not already installed):
+   - Download from https://nodejs.org/
+
+2. **Download MediaPipe packages**:
+```bash
+cd web-app
+npm install @mediapipe/pose@0.5.1675469404
+npm install @mediapipe/camera_utils@0.3.1640029074
+npm install @mediapipe/drawing_utils@0.3.1620248257
+```
+
+3. **Copy files to mediapipe directory**:
+```bash
+# Create directories
+mkdir -p mediapipe/pose
+mkdir -p mediapipe/camera_utils
+mkdir -p mediapipe/drawing_utils
+
+# Copy files (files are in the root of the package)
+cp -r node_modules/@mediapipe/pose/* mediapipe/pose/
+
+cp -r node_modules/@mediapipe/camera_utils/* mediapipe/camera_utils/
+cp -r node_modules/@mediapipe/drawing_utils/* mediapipe/drawing_utils/
+
+# Cleanup (optional)
+rm -rf node_modules package-lock.json
+```
+
+4. **Commit and push**:
+```bash
+git add mediapipe/
+git commit -m "Add local MediaPipe files"
+git push
+```
+
+The app will automatically use local files if they exist in the `mediapipe/` directory.
 
 ## Limitations
 
