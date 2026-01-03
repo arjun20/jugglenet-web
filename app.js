@@ -380,46 +380,73 @@ function predictKF() {
 }
 
 function updateJuggleCount() {
-    // Match Python version: requires at least 10 predictions
+    // Match Python version exactly: requires at least 10 predictions
     if (!predictions['Ball'] || predictions['Ball'].length < 10) return;
     
-    // Get ball Y positions (matching Python: predictions['Ball'][:,1])
-    const ballY = predictions['Ball'].map(p => p[1]).filter(y => !isNaN(y));
+    // Get ball Y positions (matching Python: y = np.array(predictions['Ball'][:,1]))
+    // Note: In image coordinates, Y increases downward, so max Y = ball at lowest point
+    const ballY = [];
+    for (let i = 0; i < predictions['Ball'].length; i++) {
+        const y = predictions['Ball'][i][1];
+        if (!isNaN(y)) {
+            ballY.push(y);
+        } else {
+            // Need to maintain index alignment, so we can't just filter
+            // Instead, we'll work with the full array and handle NaN
+            ballY.push(NaN);
+        }
+    }
     
-    if (ballY.length < 10) return;
+    // Check if we have enough valid points (matching Python: if len(y) > 10)
+    const validY = ballY.filter(y => !isNaN(y));
+    if (validY.length < 10) return;
     
-    // Find minimum points (peaks in inverted Y) - matching Python find_peaks with prominence=0.02
-    const invertedY = ballY.map(y => 1 - y); // Invert for peak detection
-    const peaks = findPeaks(invertedY, { prominence: 0.02 });
+    // Find peaks directly in Y array (matching Python: find_peaks(y, prominence=0.02))
+    // Note: Peaks in Y = maximum Y values = ball at lowest point (touching body part)
+    // The comment in Python says "max peaks of y will be min peaks of height trajectory"
+    const peaks = findPeaks(ballY, { prominence: 0.02 });
     
     if (peaks.length > 0) {
-        const minIndex = peaks[0]; // First minimum point (matching Python: min_peak[0])
+        // Get first peak index (matching Python: min_index = min_peak[0])
+        const minIndex = peaks[0];
+        
+        // Get ball position at this index (matching Python: ball_pos = np.array(predictions['Ball'][min_index,:2]))
         const ballPos = [predictions['Ball'][minIndex][0], predictions['Ball'][minIndex][1]];
         
-        // Find closest body part (matching Python logic)
+        // Find closest body part (matching Python logic exactly)
         let minDist = Infinity;
         let closestPart = null;
         
-        Object.keys(POI_INDICES).forEach(part => {
-            if (predictions[part] && predictions[part][minIndex]) {
-                const partPos = [predictions[part][minIndex][0], predictions[part][minIndex][1]];
-                // Euclidean distance (matching Python: np.linalg.norm(ball_pos-pos))
+        // Iterate through all predictions (matching Python: for key,value in predictions.items())
+        Object.keys(predictions).forEach(key => {
+            if (key === 'Ball') return; // Skip Ball (matching Python: if key == "Ball": continue)
+            
+            // Get position at same index (matching Python: pos = value[min_index,:2])
+            if (predictions[key] && predictions[key][minIndex]) {
+                const pos = [predictions[key][minIndex][0], predictions[key][minIndex][1]];
+                
+                // Check if position is valid (not NaN)
+                if (isNaN(pos[0]) || isNaN(pos[1])) return;
+                
+                // Euclidean distance (matching Python: dist = np.linalg.norm(ball_pos-pos))
                 const dist = Math.sqrt(
-                    Math.pow(ballPos[0] - partPos[0], 2) + 
-                    Math.pow(ballPos[1] - partPos[1], 2)
+                    Math.pow(ballPos[0] - pos[0], 2) + 
+                    Math.pow(ballPos[1] - pos[1], 2)
                 );
                 
                 if (dist < minDist) {
                     minDist = dist;
-                    closestPart = part;
+                    closestPart = key;
                 }
             }
         });
         
         if (closestPart) {
+            // Increment count (matching Python: current_count[point] += 1)
             counts[closestPart]++;
             
-            // Reset history to avoid double counting (matching Python: predictions[key] = np.empty(shape=(0,4)))
+            // Reset history to avoid double-counting (matching Python exactly)
+            // Python: for key in predictions: predictions[key] = np.empty(shape=(0,4))
             POI_NAMES.forEach(poi => {
                 predictions[poi] = [];
                 measurements[poi] = [];
@@ -429,17 +456,47 @@ function updateJuggleCount() {
 }
 
 function findPeaks(data, options = {}) {
-    const prominence = options.prominence || 0.01;
+    // Match scipy.signal.find_peaks behavior
+    const prominence = options.prominence || 0.02;
     const peaks = [];
     
+    // Filter out NaN values for prominence calculation, but keep indices
+    const validData = data.map((val, idx) => ({ val, idx })).filter(d => !isNaN(d.val));
+    
     for (let i = 1; i < data.length - 1; i++) {
-        if (data[i] > data[i - 1] && data[i] > data[i + 1]) {
-            // Check prominence
-            let leftMin = Math.min(...data.slice(Math.max(0, i - 10), i));
-            let rightMin = Math.min(...data.slice(i + 1, Math.min(data.length, i + 11)));
-            let minVal = Math.max(leftMin, rightMin);
+        // Skip if current point is NaN
+        if (isNaN(data[i])) continue;
+        
+        // Check if it's a local maximum
+        const prev = isNaN(data[i - 1]) ? -Infinity : data[i - 1];
+        const next = isNaN(data[i + 1]) ? -Infinity : data[i + 1];
+        
+        if (data[i] > prev && data[i] > next) {
+            // Calculate prominence (matching scipy find_peaks)
+            // Find minimum on left and right sides
+            let leftMin = Infinity;
+            let rightMin = Infinity;
             
-            if (data[i] - minVal >= prominence) {
+            // Look left (up to 10 points back, or to start)
+            for (let j = Math.max(0, i - 10); j < i; j++) {
+                if (!isNaN(data[j]) && data[j] < leftMin) {
+                    leftMin = data[j];
+                }
+            }
+            
+            // Look right (up to 10 points forward, or to end)
+            for (let j = i + 1; j < Math.min(data.length, i + 11); j++) {
+                if (!isNaN(data[j]) && data[j] < rightMin) {
+                    rightMin = data[j];
+                }
+            }
+            
+            // Prominence is the minimum of the two sides
+            const minVal = Math.max(leftMin === Infinity ? -Infinity : leftMin, 
+                                   rightMin === Infinity ? -Infinity : rightMin);
+            
+            // Check if prominence threshold is met
+            if (minVal === -Infinity || (data[i] - minVal >= prominence)) {
                 peaks.push(i);
             }
         }
