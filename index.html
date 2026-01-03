@@ -195,9 +195,9 @@
         </div>
     </div>
     
-    <!-- MediaPipe Pose -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/pose.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js" crossorigin="anonymous"></script>
+    <!-- MediaPipe Pose - Load synchronously to ensure availability -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/pose.js" crossorigin="anonymous" onerror="handleScriptError('MediaPipe Pose')"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js" crossorigin="anonymous" onerror="handleScriptError('MediaPipe Camera')"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js" crossorigin="anonymous"></script>
     
     <!-- TensorFlow.js for YOLO -->
@@ -207,6 +207,18 @@
     <script src="kalman.js"></script>
     <script src="juggle-counter.js"></script>
     <script src="app.js"></script>
+    
+    <script>
+        function handleScriptError(scriptName) {
+            console.error('Failed to load:', scriptName);
+            const errorDiv = document.getElementById('error');
+            const errorMsg = document.getElementById('errorMsg');
+            if (errorDiv && errorMsg) {
+                errorDiv.style.display = 'block';
+                errorMsg.textContent = `Failed to load ${scriptName}. Please check your internet connection and refresh the page.`;
+            }
+        }
+    </script>
 </body>
 </html>
 

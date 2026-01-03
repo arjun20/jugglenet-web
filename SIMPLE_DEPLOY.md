@@ -35,7 +35,7 @@ This guide helps you deploy JuggleNet web app **without** converting the YOLO mo
    - Source: `main` branch, `/ (root)` folder
    - Save
    - Wait 1-2 minutes
-   - Your app is live at: `https://YOUR_USERNAME.github.io/jugglenet-web/`
+   - Your app is live at: `https://arjun20.github.io/jugglenet-web/`
 
 ### Option 2: Vercel (Fastest)
 

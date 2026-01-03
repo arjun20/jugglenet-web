@@ -36,6 +36,11 @@ POI_NAMES.forEach(poi => {
 let ballDetectionModel = null;
 
 async function initMediaPipePose() {
+    // Wait for Pose to be available
+    if (typeof Pose === 'undefined') {
+        throw new Error('MediaPipe Pose library not loaded. Please check your internet connection and try again.');
+    }
+    
     pose = new Pose({
         locateFile: (file) => {
             return `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/${file}`;
@@ -379,6 +384,22 @@ function updateStatsDisplay() {
 async function startCamera() {
     try {
         document.getElementById('loading').style.display = 'block';
+        
+        // Wait for MediaPipe libraries to load
+        let retries = 0;
+        const maxRetries = 50; // 5 seconds max wait
+        while ((typeof Pose === 'undefined' || typeof Camera === 'undefined') && retries < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            retries++;
+        }
+        
+        if (typeof Pose === 'undefined') {
+            throw new Error('MediaPipe Pose library failed to load. Please refresh the page.');
+        }
+        
+        if (typeof Camera === 'undefined') {
+            throw new Error('MediaPipe Camera library failed to load. Please refresh the page.');
+        }
         
         // Initialize MediaPipe
         await initMediaPipePose();
