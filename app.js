@@ -43,7 +43,15 @@ async function initMediaPipePose() {
     
     pose = new Pose({
         locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/${file}`;
+            // Try multiple CDN sources for MediaPipe files
+            const cdns = [
+                `https://unpkg.com/@mediapipe/pose@0.5.1635989137/${file}`,
+                `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/${file}`,
+                `https://unpkg.com/@mediapipe/pose@0.5.1635989137/solution_pose/${file}`,
+                `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/solution_pose/${file}`
+            ];
+            // Return first CDN (will try others if this fails)
+            return cdns[0];
         }
     });
     

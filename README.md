@@ -82,6 +82,39 @@ You can use any image editing tool or online icon generator.
 3. Select "Add to Home Screen"
 4. The app will appear as a native app!
 
+## Troubleshooting
+
+### MediaPipe CDN Loading Issues
+
+If you see "MediaPipe Pose library failed to load" errors:
+
+1. **Check Browser Console**: Open Developer Tools (F12) and check for specific error messages
+2. **Network Issues**: Ensure your internet connection is stable
+3. **CDN Blocked**: Some networks/firewalls block CDN access
+
+**Solution: Host MediaPipe Locally**
+
+If CDNs are blocked, download and host MediaPipe files locally:
+
+```bash
+# Create a mediapipe directory in web-app
+mkdir -p web-app/mediapipe
+
+# Download MediaPipe files (you'll need to get these from npm or GitHub)
+# Option 1: Using npm (if you have Node.js)
+cd web-app
+npm install @mediapipe/pose@0.5.1635989137
+npm install @mediapipe/camera_utils@0.3.1640029074
+npm install @mediapipe/drawing_utils@0.3.1620248257
+
+# Copy the files to a mediapipe folder
+cp -r node_modules/@mediapipe/pose/dist/* mediapipe/pose/
+cp -r node_modules/@mediapipe/camera_utils/dist/* mediapipe/camera_utils/
+cp -r node_modules/@mediapipe/drawing_utils/dist/* mediapipe/drawing_utils/
+```
+
+Then update `index.html` to use local files instead of CDN URLs.
+
 ## Limitations
 
 - **Ball Detection**: Currently uses placeholder. You need to convert and load your YOLO model

@@ -198,26 +198,35 @@
     <!-- TensorFlow.js for YOLO -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
     
-    <!-- Main application -->
+    <!-- Main application (load these first) -->
     <script src="kalman.js"></script>
     <script src="juggle-counter.js"></script>
     
     <!-- Load MediaPipe scripts dynamically with fallback -->
     <script>
+        // Try different possible file paths for MediaPipe
+        // MediaPipe files are typically in the root or solution_pose directory
         const MEDIAPIPE_CDNS = [
+            'https://unpkg.com/@mediapipe/pose@0.5.1635989137/solution_pose/pose.js',
+            'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/solution_pose/pose.js',
             'https://unpkg.com/@mediapipe/pose@0.5.1635989137/pose.js',
             'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/pose.js',
-            'https://cdn.skypack.dev/@mediapipe/pose@0.5.1635989137'
+            'https://unpkg.com/@mediapipe/pose@0.5.1635989137/dist/pose.js',
+            'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/dist/pose.js'
         ];
         
         const CAMERA_CDNS = [
             'https://unpkg.com/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js',
-            'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js'
+            'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js',
+            'https://unpkg.com/@mediapipe/camera_utils@0.3.1640029074/dist/camera_utils.js',
+            'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/dist/camera_utils.js'
         ];
         
         const DRAWING_CDNS = [
             'https://unpkg.com/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js',
-            'https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js'
+            'https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js',
+            'https://unpkg.com/@mediapipe/drawing_utils@0.3.1620248257/dist/drawing_utils.js',
+            'https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/dist/drawing_utils.js'
         ];
         
         function loadScript(src) {
@@ -225,58 +234,129 @@
                 const script = document.createElement('script');
                 script.src = src;
                 script.crossOrigin = 'anonymous';
-                script.onload = () => resolve();
-                script.onerror = () => reject(new Error(`Failed to load: ${src}`));
+                script.onload = () => {
+                    console.log('Script loaded successfully:', src);
+                    resolve();
+                };
+                script.onerror = (error) => {
+                    console.error('Script load error:', src, error);
+                    reject(new Error(`Failed to load: ${src}`));
+                };
                 document.head.appendChild(script);
             });
         }
         
         async function loadScriptWithFallback(cdnList, scriptName) {
+            const errors = [];
             for (const cdn of cdnList) {
                 try {
+                    console.log(`Attempting to load ${scriptName} from: ${cdn}`);
                     await loadScript(cdn);
-                    console.log(`Successfully loaded ${scriptName} from ${cdn}`);
+                    console.log(`✓ Successfully loaded ${scriptName} from ${cdn}`);
                     return true;
                 } catch (error) {
-                    console.warn(`Failed to load ${scriptName} from ${cdn}, trying next...`);
+                    errors.push(`${cdn}: ${error.message}`);
+                    console.warn(`✗ Failed to load ${scriptName} from ${cdn}`);
                 }
             }
-            throw new Error(`Failed to load ${scriptName} from all CDN sources`);
+            console.error(`All attempts failed for ${scriptName}:`, errors);
+            throw new Error(`Failed to load ${scriptName} from all CDN sources. Errors: ${errors.join('; ')}`);
+        }
+        
+        async function testCDN(url) {
+            try {
+                const response = await fetch(url, { method: 'HEAD', mode: 'no-cors' });
+                return true;
+            } catch (e) {
+                try {
+                    // Try a full fetch to see the actual error
+                    const response = await fetch(url);
+                    return response.ok;
+                } catch (e2) {
+                    return false;
+                }
+            }
         }
         
         async function loadMediaPipeLibraries() {
             try {
-                document.getElementById('loading').style.display = 'block';
-                document.getElementById('loading').querySelector('p').textContent = 'Loading MediaPipe libraries...';
+                const loadingDiv = document.getElementById('loading');
+                const loadingP = loadingDiv ? loadingDiv.querySelector('p') : null;
+                if (loadingDiv) loadingDiv.style.display = 'block';
+                if (loadingP) loadingP.textContent = 'Loading MediaPipe libraries...';
+                
+                console.log('Starting MediaPipe library loading...');
+                console.log('Testing CDN availability...');
+                
+                // Test first CDN URL
+                const testUrl = MEDIAPIPE_CDNS[0];
+                console.log('Testing:', testUrl);
                 
                 await loadScriptWithFallback(MEDIAPIPE_CDNS, 'MediaPipe Pose');
+                
+                // Check if Pose is now available
+                if (typeof Pose === 'undefined') {
+                    // Wait a bit more - sometimes scripts need time to initialize
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    if (typeof Pose === 'undefined') {
+                        throw new Error('MediaPipe Pose script loaded but Pose class is not available. This may indicate a version mismatch or script error. Check browser console for script errors.');
+                    }
+                }
+                console.log('✓ Pose class is available:', typeof Pose);
+                
                 await loadScriptWithFallback(CAMERA_CDNS, 'MediaPipe Camera');
+                await new Promise(resolve => setTimeout(resolve, 200));
+                if (typeof Camera === 'undefined') {
+                    throw new Error('MediaPipe Camera script loaded but Camera class is not available. Check browser console for script errors.');
+                }
+                console.log('✓ Camera class is available:', typeof Camera);
+                
                 await loadScriptWithFallback(DRAWING_CDNS, 'MediaPipe Drawing Utils');
                 
-                console.log('All MediaPipe libraries loaded successfully');
+                console.log('✓ All MediaPipe libraries loaded successfully');
                 
-                // Now load the main app
-                const appScript = document.createElement('script');
-                appScript.src = 'app.js';
-                appScript.onerror = () => {
-                    document.getElementById('error').style.display = 'block';
-                    document.getElementById('errorMsg').textContent = 'Failed to load app.js';
-                };
-                document.body.appendChild(appScript);
+                // Don't load app.js here - it will be loaded by the parent function
                 
             } catch (error) {
                 console.error('Error loading MediaPipe:', error);
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('error').style.display = 'block';
-                document.getElementById('errorMsg').textContent = error.message + '. Please check your internet connection and refresh the page.';
+                console.error('Full error details:', error.stack);
+                const errorDiv = document.getElementById('error');
+                const loadingDiv = document.getElementById('loading');
+                if (loadingDiv) loadingDiv.style.display = 'none';
+                if (errorDiv) {
+                    errorDiv.style.display = 'block';
+                    const errorMsg = document.getElementById('errorMsg');
+                    if (errorMsg) {
+                        errorMsg.innerHTML = error.message + 
+                            '<br><br><strong>Troubleshooting Steps:</strong><br>' +
+                            '1. Open Browser Console (F12) and check for detailed errors<br>' +
+                            '2. Check your internet connection<br>' +
+                            '3. Try refreshing the page<br>' +
+                            '4. Check if CDN is blocked by firewall/proxy<br>' +
+                            '5. If CDN is blocked, see README.md for local hosting instructions<br><br>' +
+                            '<strong>Console Errors:</strong> Check the browser console (F12 → Console tab) for specific error messages.';
+                    }
+                }
             }
         }
         
         // Start loading MediaPipe libraries when DOM is ready
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', loadMediaPipeLibraries);
+            document.addEventListener('DOMContentLoaded', () => {
+                loadMediaPipeLibraries().then(() => {
+                    // Load app.js after MediaPipe is ready
+                    const appScript = document.createElement('script');
+                    appScript.src = 'app.js';
+                    document.body.appendChild(appScript);
+                });
+            });
         } else {
-            loadMediaPipeLibraries();
+            loadMediaPipeLibraries().then(() => {
+                // Load app.js after MediaPipe is ready
+                const appScript = document.createElement('script');
+                appScript.src = 'app.js';
+                document.body.appendChild(appScript);
+            });
         }
     </script>
 </body>
