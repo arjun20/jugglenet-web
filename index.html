@@ -195,28 +195,88 @@
         </div>
     </div>
     
-    <!-- MediaPipe Pose - Load synchronously to ensure availability -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/pose.js" crossorigin="anonymous" onerror="handleScriptError('MediaPipe Pose')"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js" crossorigin="anonymous" onerror="handleScriptError('MediaPipe Camera')"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js" crossorigin="anonymous"></script>
-    
     <!-- TensorFlow.js for YOLO -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
     
     <!-- Main application -->
     <script src="kalman.js"></script>
     <script src="juggle-counter.js"></script>
-    <script src="app.js"></script>
     
+    <!-- Load MediaPipe scripts dynamically with fallback -->
     <script>
-        function handleScriptError(scriptName) {
-            console.error('Failed to load:', scriptName);
-            const errorDiv = document.getElementById('error');
-            const errorMsg = document.getElementById('errorMsg');
-            if (errorDiv && errorMsg) {
-                errorDiv.style.display = 'block';
-                errorMsg.textContent = `Failed to load ${scriptName}. Please check your internet connection and refresh the page.`;
+        const MEDIAPIPE_CDNS = [
+            'https://unpkg.com/@mediapipe/pose@0.5.1635989137/pose.js',
+            'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/pose.js',
+            'https://cdn.skypack.dev/@mediapipe/pose@0.5.1635989137'
+        ];
+        
+        const CAMERA_CDNS = [
+            'https://unpkg.com/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js',
+            'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js'
+        ];
+        
+        const DRAWING_CDNS = [
+            'https://unpkg.com/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js',
+            'https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js'
+        ];
+        
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.crossOrigin = 'anonymous';
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error(`Failed to load: ${src}`));
+                document.head.appendChild(script);
+            });
+        }
+        
+        async function loadScriptWithFallback(cdnList, scriptName) {
+            for (const cdn of cdnList) {
+                try {
+                    await loadScript(cdn);
+                    console.log(`Successfully loaded ${scriptName} from ${cdn}`);
+                    return true;
+                } catch (error) {
+                    console.warn(`Failed to load ${scriptName} from ${cdn}, trying next...`);
+                }
             }
+            throw new Error(`Failed to load ${scriptName} from all CDN sources`);
+        }
+        
+        async function loadMediaPipeLibraries() {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('loading').querySelector('p').textContent = 'Loading MediaPipe libraries...';
+                
+                await loadScriptWithFallback(MEDIAPIPE_CDNS, 'MediaPipe Pose');
+                await loadScriptWithFallback(CAMERA_CDNS, 'MediaPipe Camera');
+                await loadScriptWithFallback(DRAWING_CDNS, 'MediaPipe Drawing Utils');
+                
+                console.log('All MediaPipe libraries loaded successfully');
+                
+                // Now load the main app
+                const appScript = document.createElement('script');
+                appScript.src = 'app.js';
+                appScript.onerror = () => {
+                    document.getElementById('error').style.display = 'block';
+                    document.getElementById('errorMsg').textContent = 'Failed to load app.js';
+                };
+                document.body.appendChild(appScript);
+                
+            } catch (error) {
+                console.error('Error loading MediaPipe:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('errorMsg').textContent = error.message + '. Please check your internet connection and refresh the page.';
+            }
+        }
+        
+        // Start loading MediaPipe libraries when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', loadMediaPipeLibraries);
+        } else {
+            loadMediaPipeLibraries();
         }
     </script>
 </body>

@@ -461,16 +461,33 @@ function stopCamera() {
     document.getElementById('stopBtn').style.display = 'none';
 }
 
-// Event listeners
-document.getElementById('startBtn').addEventListener('click', startCamera);
-document.getElementById('stopBtn').addEventListener('click', stopCamera);
-
-// Handle page visibility for iOS
-document.addEventListener('visibilitychange', () => {
-    if (document.hidden && isRunning) {
-        // Pause when tab is hidden
-    } else if (!document.hidden && !isRunning && camera) {
-        // Resume if needed
+// Event listeners - ensure DOM is ready
+function setupEventListeners() {
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    
+    if (startBtn) {
+        startBtn.addEventListener('click', startCamera);
     }
-});
+    
+    if (stopBtn) {
+        stopBtn.addEventListener('click', stopCamera);
+    }
+    
+    // Handle page visibility for iOS
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && isRunning) {
+            // Pause when tab is hidden
+        } else if (!document.hidden && !isRunning && camera) {
+            // Resume if needed
+        }
+    });
+}
+
+// Setup event listeners when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupEventListeners);
+} else {
+    setupEventListeners();
+}
 
